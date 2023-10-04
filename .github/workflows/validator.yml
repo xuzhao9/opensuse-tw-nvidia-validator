@@ -12,6 +12,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        path: workspace
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -23,7 +24,6 @@ jobs:
           docker-image: ${{ env.DOCKER_IMAGE }}
       - name: Run Tumbleweed docker
         run: |
-          mkdir -p workspace
           container_id=$(docker run \
             --tty \
             --detach \
@@ -33,9 +33,24 @@ jobs:
             tail -f /dev/null
           )
           echo "container_id=${container_id}" >> $GITHUB_ENV
-      - name: Print container id
+      - name: Run the validator
         run: |
           echo "Container ID: ${container_id}"
+          pushd /workspace
+          mkdir -p output
+          mkdir -p nvidia-drivers
+          python3 ./validator/nvidia-driver-inspector.py -n 5 -o $PWD/nvidia-drivers \
+                  --output-json $PWD/output/metadata.json
+          cat $PWD/output/metadata.json
+          python3 ./validator/nvidia-driver-inspector.py --driver-dir $PWD/nvidia-drivers --build \
+                  --metadata-json $PWD/output/metadata.json \
+                  --output-json $PWD/output/build-result.json
+          cat $PWD/output/build-result.json
+      - name: Upload the result to GitHub Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Validator Result
+          path: workspace/output
       - name: Kill all running Tumbleweed dockers
         if: always()
         run: |
