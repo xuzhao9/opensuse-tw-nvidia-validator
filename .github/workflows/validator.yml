@@ -21,3 +21,22 @@ jobs:
         uses: pytorch/test-infra/.github/actions/pull-docker-image@main
         with:
           docker-image: ${{ env.DOCKER_IMAGE }}
+      - name: Run Tumbleweed docker
+        run: |
+          mkdir -p workspace
+          container_id=$(docker run \
+            --tty \
+            --detach \
+            -v "${PWD}/workspace:/workspace" \
+            -w / \
+            "${{ env.DOCKER_IMAGE }}" \
+            tail -f /dev/null
+          )
+          echo "container_id=${container_id}" >> $GITHUB_ENV
+      - name: Print container id
+        run: |
+          echo "Container ID: ${container_id}"
+      - name: Kill all running Tumbleweed dockers
+        if: always()
+        run: |
+          docker kill $(docker ps -q)
