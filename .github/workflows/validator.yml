@@ -39,10 +39,10 @@ jobs:
           pushd /workspace
           mkdir -p output
           mkdir -p nvidia-drivers
-          python3 ./validator/nvidia-driver-inspector.py -n 5 -o $PWD/nvidia-drivers \
+          python3 ./validator/nvidia-driver-inspector.py -n 5 --download $PWD/nvidia-drivers \
                   --output-json $PWD/output/metadata.json
           cat $PWD/output/metadata.json
-          python3 ./validator/nvidia-driver-inspector.py --driver-dir $PWD/nvidia-drivers --build \
+          python3 ./validator/nvidia-driver-inspector.py --build $PWD/nvidia-drivers \
                   --metadata-json $PWD/output/metadata.json \
                   --output-json $PWD/output/build-result.json
           cat $PWD/output/build-result.json
