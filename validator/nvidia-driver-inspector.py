@@ -31,7 +31,11 @@ class NVIDIADriverBuildResult:
     metadata: NVIDIADriverMetadata
     opensuse_snapshot_version: str
     kernel_version: str
-    build_success: bool
+    # could be one of the following:
+    # "success"
+    # "build failure"
+    # "extraction failure"
+    build_status: str
 
 class EnhancedJSONEncoder(json.JSONEncoder):
     def default(self, o):
@@ -106,16 +110,48 @@ def fetch_nvidia_driver_metadata(n: int=DEFAULT_TEST_VERSIONS) -> List[NVIDIADri
 
 def _get_driver_file_name(base_dir: str, version: str) -> str:
     driver_file_dir = os.path.join(base_dir, version)
-    run_files = list(filter(lambda x: x.endswith(".run") and x.startswith("NVIDIA"), os.listdir(driver_file_dir)))
+    run_files = list(filter(lambda x: os.path.isfile(x) and x.endswith(".run") and x.startswith("NVIDIA"), os.listdir(driver_file_dir)))
     assert len(run_files), f"Couldn't find expected NVIDIA driver file at {driver_file_dir}!"
     return run_files[0]
 
-# extract the driver and return the extracted directory path
-def preprocess_driver_file(driver_file_name: str, driver_file_path: str) -> str:
-    pass
+def _get_extracted_driver_dir(base_dir: str) -> str:
+    driver_file_dir = base_dir
+    dirs = list(filter(lambda x: os.path.isdir(x) and x.startswith("NVIDIA"), os.listdir(driver_file_dir)))
+    assert len(dirs), f"Couldn't find expected NVIDIA driver file at {driver_file_dir}!"
+    return run_files[0]
 
-def try_build_driver(metadata: NVIDIADriverMetadata, driver_directory_path: str) -> NVIDIADriverBuildResult:
-    pass
+def try_build_driver(metadata: NVIDIADriverMetadata, driver_file_name: str, driver_file_path: str, build_result_dir: str) -> NVIDIADriverBuildResult:
+    build_log_path = os.path.join(build_result_dir, f"build_log_{metadata.version}.txt")
+    subprocess.check_call(["chmod", "+x", driver_file_name], cwd=driver_file_path)
+    print(f"Extracting driver file {driver_file_name}")
+    try:
+        # TODO: write output to both console and build log
+        subprocess.check_call([f"./{driver_file_name}", "-x"], cwd=driver_file_path)
+    except SubprocessError:
+        return NVIDIADriverBuildResult(
+            metadata=metadata,
+            opensuse_snapshot_version=_get_opensuse_snapshot_version(),
+            kernel_version=_get_kernel_version(),
+            build_status="extraction failure"
+        )
+    extracted_driver_dir = _get_extracted_driver_dir(driver_file_path)
+    print(f"Building driver version: {metadata.version}")
+    try:
+        kernel_module_dir = os.path.join(extracted_driver_dir, "kernel")
+        subprocess.check_call(["make"], cwd=kernel_module_dir)
+    except SubprocessError:
+        return NVIDIADriverBuildResult(
+            metadata=metadata,
+            opensuse_snapshot_version=_get_opensuse_snapshot_version(),
+            kernel_version=_get_kernel_version(),
+            build_status="build failure"
+        )
+    return NVIDIADriverBuildResult(
+        metadata=metadata,
+        opensuse_snapshot_version=_get_opensuse_snapshot_version(),
+        kernel_version=_get_kernel_version(),
+        build_status="success"
+    )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -142,10 +178,8 @@ if __name__ == "__main__":
         build_results = []
         for m in metadata:
             driver_file_name = _get_driver_file_name(metadata_dir, m.version)
-            driver_dir = preprocess_driver_file(driver_file_name, os.path.join(metadata_dir, m.version))
-            full_driver_dir = os.path.join(metadata_dir, m.version, driver_dir)
-            # Write detailed build results to args.build_result_dir
-            build_results.append(try_build_driver(m, full_driver_dir, args.build_result_dir))
+            # Write detailed build results to f"{args.build_result_dir}/build.txt"
+            build_results.append(try_build_driver(m, driver_file_name, os.path.join(metadata_dir, m.version), args.build_result_dir))
         with open(args.build_json, "w") as bjson:
             bjson.write(json.dumps(build_results, cls=EnhancedJSONEncoder, indent=4))
     else:
