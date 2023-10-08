@@ -44,13 +44,13 @@ jobs:
           cat $PWD/output/metadata.json
           python3 ./validator/nvidia-driver-inspector.py --build $PWD/nvidia-drivers \
                   --metadata-json $PWD/output/metadata.json \
-                  --output-json $PWD/output/build-result.json
-          cat $PWD/output/build-result.json
+                  --output-json $PWD/output/build/result.json
+          cat $PWD/output/build/result.json
       - name: Upload the result to GitHub Artifact
         uses: actions/upload-artifact@v3
         with:
           name: Validator Result
-          path: workspace/output
+          path: workspace/output/build
       - name: Kill all running Tumbleweed dockers
         if: always()
         run: |

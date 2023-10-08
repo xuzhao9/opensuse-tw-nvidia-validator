@@ -11,6 +11,7 @@ import json
 import os
 import re
 import requests
+import subprocess
 import urllib
 from typing import Optional, Any, List
 
@@ -24,6 +25,13 @@ DEFAULT_TEST_VERSIONS = 3
 class NVIDIADriverMetadata:
     version: str
     release_date: datetime
+
+@dataclass
+class NVIDIADriverBuildResult:
+    metadata: NVIDIADriverMetadata
+    opensuse_snapshot_version: str
+    kernel_version: str
+    build_success: bool
 
 class EnhancedJSONEncoder(json.JSONEncoder):
     def default(self, o):
@@ -96,13 +104,26 @@ def fetch_nvidia_driver_metadata(n: int=DEFAULT_TEST_VERSIONS) -> List[NVIDIADri
     ), versions))
     return _get_most_recent_versions(metadata, n)
 
+def _get_driver_file_name(base_dir: str, version: str) -> str:
+    driver_file_dir = os.path.join(base_dir, version)
+    run_files = list(filter(lambda x: x.endswith(".run") and x.startswith("NVIDIA"), os.listdir(driver_file_dir)))
+    assert len(run_files), f"Couldn't find expected NVIDIA driver file at {driver_file_dir}!"
+    return run_files[0]
+
+# extract the driver and return the extracted directory path
+def preprocess_driver_file(driver_file_name: str, driver_file_path: str) -> str:
+    pass
+
+def try_build_driver(metadata: NVIDIADriverMetadata, driver_directory_path: str) -> NVIDIADriverBuildResult:
+    pass
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", type=int, default=DEFAULT_TEST_VERSIONS, help="Inspect and fetch the most recent N nvidia driver releases.")
     parser.add_argument("--download", action="store_true", help="Download the drivers to the given directory.")
     parser.add_argument("--build", action="store_true", help="Try building the given directory, and store the results in output.")
-    parser.add_argument("--metadata-json", type=str, help="Specify source of the metadata json")
-    parser.add_argument("--build-json", type=str, help="Specify")
+    parser.add_argument("--metadata-json", type=str, help="Specify the metadata json file.")
+    parser.add_argument("--build-json", type=str, help="Specify the build result json file.")
     args = parser.parse_args()
     if args.metadata_json:
         metadata = fetch_nvidia_driver_metadata(args.n)
@@ -114,7 +135,19 @@ if __name__ == "__main__":
             for m in metadata:
                 download_driver(m.version, target_dir=metadata_dir)
     elif args.build_json:
-        pass
+        with open(args.metadata_json, "r") as mj:
+            metadata = json.loads(mj, cls=EnhancedJSONEncoder)
+        metadata_dir = os.path.dirname(args.metadata_json)
+        build_result_dir = os.path.dirname(args.build_json)
+        build_results = []
+        for m in metadata:
+            driver_file_name = _get_driver_file_name(metadata_dir, m.version)
+            driver_dir = preprocess_driver_file(driver_file_name, os.path.join(metadata_dir, m.version))
+            full_driver_dir = os.path.join(metadata_dir, m.version, driver_dir)
+            # Write detailed build results to args.build_result_dir
+            build_results.append(try_build_driver(m, full_driver_dir, args.build_result_dir))
+        with open(args.build_json, "w") as bjson:
+            bjson.write(json.dumps(build_results, cls=EnhancedJSONEncoder, indent=4))
     else:
         raise RuntimeError("User must specify --metadata_json or --build_json!")
  
