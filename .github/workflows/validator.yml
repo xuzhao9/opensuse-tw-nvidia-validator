@@ -37,16 +37,8 @@ jobs:
       - name: Run the validator
         run: |
           echo "Container ID: ${container_id}"
-          pushd /workspace
-          mkdir -p /workspace/.workdir/build
-          # Check the most recent 3 NVIDIA driver releases
-          python3 ./opensuse_tw_nvidia_validator/nvidia-driver-inspector.py -n 3 --download \
-                  --metadata-json $PWD/.workdir/metadata.json
-          cat ./.workdir/metadata.json
-          python3 ./opensuse_tw_nvidia_validator/nvidia-driver-inspector.py \
-                  --metadata-json $PWD/.workdir/metadata.json \
-                  --output-json $PWD/.workdir/build/build.json
-          cat ./.workdir/build/build.json
+          docker exec -t -w "/workspace" "${container_name}" bash /workspace/.github/scripts/metadata.sh
+          docker exec -t -w "/workspace" "${container_name}" bash /workspace/.github/scripts/build.sh
       - name: Upload the result to GitHub Artifact
         uses: actions/upload-artifact@v3
         with:
