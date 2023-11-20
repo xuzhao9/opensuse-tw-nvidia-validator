@@ -17,7 +17,7 @@ import re
 import requests
 import subprocess
 import urllib
-from typing import Any, List
+from typing import Optional, Any, List
 
 # NVIDIA driver link URL
 # https://us.download.nvidia.com/XFree86/Linux-x86_64/535.113.01/NVIDIA-Linux-x86_64-535.113.01.run
@@ -119,11 +119,12 @@ def _get_driver_file_name(driver_file_dir: str) -> str:
     assert len(run_files), f"Couldn't find expected NVIDIA driver file at {driver_file_dir}!"
     return run_files[0]
 
-def _get_extracted_driver_dir(base_dir: str) -> str:
+def _get_extracted_driver_dir(base_dir: str) -> Optional[str]:
     driver_file_dir = base_dir
     dirs = list(filter(lambda x: os.path.isdir(os.path.join(driver_file_dir, x)) and x.startswith("NVIDIA"),
                        os.listdir(driver_file_dir)))
-    assert len(dirs), f"Couldn't find expected NVIDIA driver file at {driver_file_dir}"
+    if not len(dirs):
+        return None
     return dirs[0]
 
 def try_build_driver(metadata: NVIDIADriverMetadata,
@@ -138,7 +139,7 @@ def try_build_driver(metadata: NVIDIADriverMetadata,
     # Cleanup files
     pathlib.Path(build_log_path).unlink(missing_ok=True)
     extracted_driver_dir = _get_extracted_driver_dir(driver_file_dir)
-    if (os.path.exists(extracted_driver_dir)):
+    if (extracted_driver_dir and os.path.exists(extracted_driver_dir)):
         shutil.rmtree(extracted_driver_dir)
 
     # Extract the driver file
@@ -162,6 +163,7 @@ def try_build_driver(metadata: NVIDIADriverMetadata,
         with open(build_log_path, "a") as log:
             log.write(extract_output)
     extracted_driver_dir = _get_extracted_driver_dir(driver_file_dir)
+    assert extracted_driver_dir, f"Expected find extracted driver dir at {driver_file_dir}, found None."
 
     # Build the driver file
     print(f"Building driver version: {metadata.version} ... ", end="", flush=True)
