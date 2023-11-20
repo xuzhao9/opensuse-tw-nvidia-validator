@@ -17,7 +17,7 @@ import re
 import requests
 import subprocess
 import urllib
-from typing import Optional, Any, List
+from typing import Any, List
 
 # NVIDIA driver link URL
 # https://us.download.nvidia.com/XFree86/Linux-x86_64/535.113.01/NVIDIA-Linux-x86_64-535.113.01.run

@@ -37,6 +37,7 @@ jobs:
       - name: Run the validator
         run: |
           echo "Container ID: ${container_id}"
+          docker exec -t -w "/workspace" "${container_id}" bash /workspace/.github/scripts/setup.sh
           docker exec -t -w "/workspace" "${container_id}" bash /workspace/.github/scripts/metadata.sh
           docker exec -t -w "/workspace" "${container_id}" bash /workspace/.github/scripts/build.sh
       - name: Upload the result to GitHub Artifact
