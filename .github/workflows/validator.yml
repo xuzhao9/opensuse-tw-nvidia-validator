@@ -37,20 +37,20 @@ jobs:
         run: |
           echo "Container ID: ${container_id}"
           pushd /workspace
-          mkdir -p output
-          mkdir -p nvidia-drivers
-          python3 ./validator/nvidia-driver-inspector.py -n 5 --download $PWD/nvidia-drivers \
-                  --output-json $PWD/output/metadata.json
-          cat $PWD/output/metadata.json
-          python3 ./validator/nvidia-driver-inspector.py --build $PWD/nvidia-drivers \
-                  --metadata-json $PWD/output/metadata.json \
-                  --output-json $PWD/output/build/result.json
-          cat $PWD/output/build/result.json
+          mkdir -p /workspace/.workdir/build
+          # Check the most recent 3 NVIDIA driver releases
+          python3 ./opensuse_tw_nvidia_validator/nvidia-driver-inspector.py -n 3 --download \
+                  --metadata-json $PWD/.workdir/metadata.json
+          cat ./.workdir/metadata.json
+          python3 ./opensuse_tw_nvidia_validator/nvidia-driver-inspector.py \
+                  --metadata-json $PWD/.workdir/metadata.json \
+                  --output-json $PWD/.workdir/build/build.json
+          cat ./.workdir/build/build.json
       - name: Upload the result to GitHub Artifact
         uses: actions/upload-artifact@v3
         with:
           name: Validator Result
-          path: workspace/output/build
+          path: workspace/.workdir/build
       - name: Kill all running Tumbleweed dockers
         if: always()
         run: |

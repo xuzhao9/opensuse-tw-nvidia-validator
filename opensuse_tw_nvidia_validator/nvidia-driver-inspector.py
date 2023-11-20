@@ -213,7 +213,6 @@ if __name__ == "__main__":
             bjson.write(json.dumps(build_results, cls=EnhancedJSONEncoder, indent=4))
     elif args.metadata_json:
         metadata = fetch_nvidia_driver_metadata(args.n)
-        print(metadata)
         with open(args.metadata_json, "w") as mj:
             mj.write(json.dumps(metadata, cls=EnhancedJSONEncoder, indent=4))
         workdir = os.path.dirname(args.metadata_json)
