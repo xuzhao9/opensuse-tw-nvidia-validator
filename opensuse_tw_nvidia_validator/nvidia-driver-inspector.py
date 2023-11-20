@@ -23,6 +23,7 @@ from typing import Optional, Any, List
 # https://us.download.nvidia.com/XFree86/Linux-x86_64/535.113.01/NVIDIA-Linux-x86_64-535.113.01.run
 NVIDIA_DRIVER_URL = "https://us.download.nvidia.com/XFree86/Linux-x86_64/{version}/NVIDIA-Linux-x86_64-{version}.run"
 NVIDIA_DRIVER_ARCHIVE = "https://www.nvidia.com/en-us/drivers/unix/linux-amd64-display-archive/"
+KERNEL_LIB_MODULE_PATH = "/lib/modules"
 DEFAULT_TEST_VERSIONS = 3
 
 @dataclass
@@ -96,6 +97,12 @@ def _get_most_recent_versions(metadata: List[NVIDIADriverMetadata], n: int) -> L
     sorted(metadata, key=lambda x: x.release_date, reverse=True)
     return metadata[:n]
 
+def _get_tw_kernel_module_path() -> str:
+    dirs = list(filter(lambda x: os.path.isdir(os.path.join(KERNEL_LIB_MODULE_PATH, x)),
+                       os.listdir(KERNEL_LIB_MODULE_PATH)))
+    assert len(dirs), f"Required kernel module header path: {KERNEL_LIB_MODULE_PATH}."
+    return os.path.join(KERNEL_LIB_MODULE_PATH, dirs[0])
+
 def fetch_nvidia_driver_metadata(n: int=DEFAULT_TEST_VERSIONS) -> List[NVIDIADriverMetadata]:
     url_text = download_url(NVIDIA_DRIVER_ARCHIVE, "text")
     # Parse the text
@@ -168,8 +175,12 @@ def try_build_driver(metadata: NVIDIADriverMetadata,
     # Build the driver file
     print(f"Building driver version: {metadata.version} ... ", end="", flush=True)
     try:
+        kernel_header_path = _get_tw_kernel_module_path()
         kernel_module_dir = os.path.join(driver_file_dir, extracted_driver_dir, "kernel")
-        build_output = subprocess.check_output(["make"],
+        build_output = subprocess.check_output(["make", "-C",
+                                                os.path.join(kernel_header_path, "build"),
+                                                f"M={kernel_module_dir}",
+                                                "modules"],
                                                cwd=kernel_module_dir,
                                                stderr=subprocess.STDOUT).decode()
         print("[SUCCESS]", flush=True)
