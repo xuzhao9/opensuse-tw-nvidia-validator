@@ -43,3 +43,36 @@ Use the following command to unpack each of the NVIDIA driver in the metadata fi
 python opensuse_tw_nvidia_validator/nvidia-driver-inspector.py --metadata-json $PWD/.workdir/metadata.json --build-json $PWD/.workdir/build.json
 ```
 
+An example of the output build json output:
+
+```
+[
+    {
+        "metadata": {
+            "version": "545.29.02",
+            "release_date": "20231031"
+        },
+        "opensuse_snapshot_version": "20231117",
+        "kernel_version": "6.6.1-1-default",
+        "build_status": "success"
+    },
+    {
+        "metadata": {
+            "version": "535.129.03",
+            "release_date": "20231031"
+        },
+        "opensuse_snapshot_version": "20231117",
+        "kernel_version": "6.6.1-1-default",
+        "build_status": "success"
+    },
+    {
+        "metadata": {
+            "version": "525.147.05",
+            "release_date": "20231031"
+        },
+        "opensuse_snapshot_version": "20231117",
+        "kernel_version": "6.6.1-1-default",
+        "build_status": "success"
+    }
+]
+```
