@@ -15,7 +15,6 @@ python opensuse_tw_nvidia_validator/nvidia-driver-inspector.py -n 3 --metadata-j
 
 An example of `metadata.json` file looks like the following:
 
-
 ```
 [
     {
