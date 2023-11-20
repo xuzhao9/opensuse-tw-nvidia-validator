@@ -8,8 +8,11 @@ import dataclasses
 from dataclasses import dataclass
 from datetime import datetime
 import json
+import platform
+import distro
 import os
 import pathlib
+import shutil
 import re
 import requests
 import subprocess
@@ -118,7 +121,7 @@ def _get_driver_file_name(driver_file_dir: str) -> str:
 
 def _get_extracted_driver_dir(base_dir: str) -> str:
     driver_file_dir = base_dir
-    dirs = list(filter(lambda x: os.path.isdir(x) and x.startswith("NVIDIA"),
+    dirs = list(filter(lambda x: os.path.isdir(os.path.join(driver_file_dir, x)) and x.startswith("NVIDIA"),
                        os.listdir(driver_file_dir)))
     assert len(dirs), f"Couldn't find expected NVIDIA driver file at {driver_file_dir}"
     return dirs[0]
@@ -127,50 +130,60 @@ def try_build_driver(metadata: NVIDIADriverMetadata,
                      driver_file_dir: str,
                      build_result_dir: str) -> NVIDIADriverBuildResult:
     driver_file_name = _get_driver_file_name(driver_file_dir)
-    snapshot_version = _get_opensuse_snapshop_version()
-    kernel_version = _get_kernel_version()
+    snapshot_version = distro.version()
+    kernel_version = platform.release()
     build_log_path = os.path.join(build_result_dir,
                                   f"build_log_{metadata.version}_{snapshot_version}_k{kernel_version}.txt")
 
+    # Cleanup files
     pathlib.Path(build_log_path).unlink(missing_ok=True)
-    subprocess.check_call(["chmod", "+x", driver_file_name], cwd=driver_file_path)
+    extracted_driver_dir = _get_extracted_driver_dir(driver_file_dir)
+    if (os.path.exists(extracted_driver_dir)):
+        shutil.rmtree(extracted_driver_dir)
+
+    # Extract the driver file
+    subprocess.check_call(["chmod", "+x", driver_file_name], cwd=driver_file_dir)
     print(f"Extracting driver file {driver_file_name} ... ", end="", flush=True)
     try:
         extract_output = subprocess.check_output([f"./{driver_file_name}", "-x"],
-                                                 cwd=driver_file_path,
+                                                 cwd=driver_file_dir,
                                                  stderr=subprocess.STDOUT).decode()
         print("[SUCCESS]", flush=True)
-    except SubprocessError:
+    except subprocess.SubprocessError as e:
         print("[FAIL]", flush=True)
+        extract_output = e.output.decode()
         return NVIDIADriverBuildResult(
             metadata=metadata,
-            opensuse_snapshot_version=_get_opensuse_snapshot_version(),
-            kernel_version=_get_kernel_version(),
+            opensuse_snapshot_version=snapshot_version,
+            kernel_version=kernel_version,
             build_status="extraction_failure"
         )
     finally:
         with open(build_log_path, "a") as log:
             log.write(extract_output)
-    extracted_driver_dir = _get_extracted_driver_dir(driver_file_path)
+    extracted_driver_dir = _get_extracted_driver_dir(driver_file_dir)
+
+    # Build the driver file
     print(f"Building driver version: {metadata.version} ... ", end="", flush=True)
     try:
-        kernel_module_dir = os.path.join(extracted_driver_dir, "kernel")
+        kernel_module_dir = os.path.join(driver_file_dir, extracted_driver_dir, "kernel")
         build_output = subprocess.check_output(["make"],
                                                cwd=kernel_module_dir,
                                                stderr=subprocess.STDOUT).decode()
         print("[SUCCESS]", flush=True)
         return NVIDIADriverBuildResult(
             metadata=metadata,
-            opensuse_snapshot_version=_get_opensuse_snapshot_version(),
-            kernel_version=_get_kernel_version(),
+            opensuse_snapshot_version=snapshot_version,
+            kernel_version=kernel_version,
             build_status="success"
         )
-    except SubprocessError:
+    except subprocess.SubprocessError as e:
         print("[FAIL]", flush=True)
+        build_output = e.output.decode()
         return NVIDIADriverBuildResult(
             metadata=metadata,
-            opensuse_snapshot_version=_get_opensuse_snapshot_version(),
-            kernel_version=_get_kernel_version(),
+            opensuse_snapshot_version=snapshot_version,
+            kernel_version=kernel_version,
             build_status="build_failure"
         )
     finally:
@@ -182,10 +195,23 @@ if __name__ == "__main__":
     parser.add_argument("-n", type=int, default=DEFAULT_TEST_VERSIONS, help="Inspect and fetch the most recent N nvidia driver releases.")
     parser.add_argument("--download", action="store_true", help="Download the drivers to the given directory.")
     parser.add_argument("--build", action="store_true", help="Try building the given directory, and store the results in output.")
-    parser.add_argument("--metadata-json", type=str, help="Specify the metadata json file.")
+    parser.add_argument("--metadata-json", type=str, required=True, help="Specify the metadata json file.")
     parser.add_argument("--build-json", type=str, help="Specify the build result json file.")
     args = parser.parse_args()
-    if args.metadata_json:
+    if args.build_json:
+        with open(args.metadata_json, "r") as mj:
+            metadata = list(map(lambda x: NVIDIADriverMetadata(**x), json.loads(mj.read())))
+        workdir = os.path.dirname(args.metadata_json)
+        build_result_dir = os.path.dirname(args.build_json)
+        build_results = []
+        for m in metadata:
+            driver_file_dir = os.path.join(workdir, m.version)
+            # Write detailed build results to f"{args.build_result_dir}/build.txt"
+            build_results.append(
+                try_build_driver(m, driver_file_dir, build_result_dir))
+        with open(args.build_json, "w") as bjson:
+            bjson.write(json.dumps(build_results, cls=EnhancedJSONEncoder, indent=4))
+    elif args.metadata_json:
         metadata = fetch_nvidia_driver_metadata(args.n)
         print(metadata)
         with open(args.metadata_json, "w") as mj:
@@ -194,19 +220,6 @@ if __name__ == "__main__":
         if args.download:
             for m in metadata:
                 download_driver(m.version, target_dir=workdir)
-    if args.build_json:
-        with open(args.metadata_json, "r") as mj:
-            metadata = json.loads(mj.read())
-        workdir = os.path.dirname(args.metadata_json)
-        build_result_dir = os.path.dirname(args.build_json)
-        build_results = []
-        for m in metadata:
-            driver_file_dir = os.path.join(workdir, m["version"])
-            # Write detailed build results to f"{args.build_result_dir}/build.txt"
-            build_results.append(
-                try_build_driver(m, driver_file_dir, build_result_dir))
-        with open(args.build_json, "w") as bjson:
-            bjson.write(json.dumps(build_results, cls=EnhancedJSONEncoder, indent=4))
     else:
         raise RuntimeError("User must specify --metadata_json or --build_json!")
  
